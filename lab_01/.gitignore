@@ -1,0 +1,14 @@
+# Dependency directories
+node_modules/
+
+# Environment variable files
+.env
+.env.*
+!.env.example
+
+# Operating System files
+.DS_Store
+
+# Log files
+npm-debug.log*
+
