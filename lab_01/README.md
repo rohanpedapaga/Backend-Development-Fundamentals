@@ -364,20 +364,29 @@ The following screenshots capture browser developer tools confirming HTTP status
 
 ## 13. Deployment
 
-* **Status:** Deployment is currently **pending**.
-* **Deployment Readiness:**
-  * The Express application in `index.js` is structured for seamless cloud and serverless deployment:
-    ```javascript
-    if (require.main === module) {
-      app.listen(PORT, () => { ... });
-    }
-    module.exports = app;
-    ```
-  * In local execution mode, `require.main === module` evaluates to `true`, binding the application to `PORT`.
-  * For serverless environments (such as Vercel), exporting `module.exports = app` allows the platform to wrap the Express app as a serverless function handler without port conflicts.
-* No live public deployment URL has been configured at this stage.
+The Express application has been successfully deployed using Vercel.
 
----
+Deployment Status: Successfully Deployed
+
+Hosting Platform: Vercel
+
+Live Application URL: https://backend-development-fundamentals-beige.vercel.app/
+
+Available Live Endpoints
+HTTP Method	Endpoint	Description
+GET	/	Displays the welcome message
+GET	/about	Returns student information in JSON format
+GET	/time	Returns the current date and time
+GET	/random	Demonstrates the custom 404 error handler
+Deployment Configuration
+GitHub Repository: https://github.com/rohanpedapaga/Backend-Development-Fundamentals
+Production Branch: main
+Root Directory: lab_01
+Framework: Express.js
+
+The application is connected to GitHub and deployed through Vercel. The module.exports = app configuration in index.js allows Vercel to handle the Express application in its serverless environment.
+
+The deployment URL is publicly accessible and can be used to test the application's endpoints.
 
 ## 14. Learning Outcomes
 
