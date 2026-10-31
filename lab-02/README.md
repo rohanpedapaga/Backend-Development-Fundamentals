@@ -1,4 +1,4 @@
-# Lab 2 - Express.js REST API with SQLite Database
+# Lab 2 - Express.js REST API with SQLite & Turso Database
 
 ## Student Information
 
@@ -10,32 +10,43 @@
 
 ---
 
+## Live Deployment
+
+* **Deployment Status:** Successfully Deployed
+* **Hosting Platform:** [Vercel](https://vercel.com/)
+* **Live Application URL:** https://backend-development-fundamentals-ig.vercel.app
+* **Live Base API Endpoint:** https://backend-development-fundamentals-ig.vercel.app/books/
+
+---
+
 ## 1. Lab Overview
 
-This lab focuses on designing and implementing a persistent backend RESTful API using Node.js, Express.js, and an embedded SQLite database. Moving beyond in-memory and static data structures, this project establishes a relational data persistence layer to execute end-to-end Create, Read, Update, and Delete (CRUD) operations.
+This lab focuses on designing and implementing a persistent backend RESTful API using Node.js, Express.js, and relational database systems. The application manages a complete book inventory system supporting full Create, Read, Update, and Delete (CRUD) operations.
 
-The application manages a book inventory system where:
-* The Express web server receives incoming HTTP client requests.
-* The `sqlite` wrapper library provides a modern Promise-based interface on top of the underlying `sqlite3` driver.
-* SQL queries are executed with parameterized values to safeguard database integrity and protect against SQL injection vulnerabilities.
-* Persistent database state is stored locally inside a file-based database (`books.db`), initialized using a structured schema and pre-populated seed data (`database.sql`).
+The architecture features a robust dual-database configuration:
+* **Local Development:** Uses an embedded, file-based SQLite database (`books.db`) managed via `sqlite` and the native `sqlite3` driver.
+* **Production Deployment (Vercel):** Connects seamlessly to [Turso](https://turso.tech/) (a serverless cloud database powered by LibSQL/SQLite) using `@libsql/client`. This ensures permanent data persistence in a serverless cloud environment while avoiding native C++ binary and read-only filesystem limitations on Vercel.
+
+In both environments, SQL queries execute with parameterized values to safeguard database integrity and neutralize SQL injection vulnerabilities.
 
 ---
 
 ## 2. Objectives
 
 The primary objectives of this lab are:
-* Connect an Express.js backend server to a local SQLite database using `sqlite` and `sqlite3`.
-* Initialize a relational database schema with primary key auto-increment constraints and sample seed data.
+* Connect an Express.js backend server to a local SQLite database using `sqlite` and `sqlite3` for local development.
+* Implement cloud database integration with Turso (LibSQL) for persistent serverless deployment on Vercel.
+* Initialize a relational database schema with auto-increment primary keys and sample seed data.
 * Implement complete CRUD (Create, Read, Update, Delete) routes matching RESTful conventions:
   * `GET /books/`: Retrieve all records from the database.
-  * `GET /books/:bookId/`: Query a specific record by primary key using URL parameters.
+  * `GET /books/:bookId/`: Query a specific record by primary key using URL route parameters.
   * `POST /books/`: Parse JSON request bodies to insert new records into the database.
   * `PUT /books/:bookId/`: Modify and update existing database records by identifier.
   * `DELETE /books/:bookId/`: Remove specific records from the persistent store.
 * Utilize asynchronous JavaScript (`async`/`await`) to manage non-blocking database queries smoothly.
 * Implement parameterized SQL queries (`?` placeholders) to prevent SQL injection attacks.
-* Test and validate all HTTP endpoints and request methods using Postman.
+* Configure environment variables for secure database authentication in production.
+* Test and validate all HTTP endpoints and request methods using Postman and the live Vercel deployment.
 
 ---
 
@@ -45,10 +56,13 @@ The project utilizes the following technologies and exact dependency versions as
 
 * **Runtime Environment:** [Node.js](https://nodejs.org/) (v18+ recommended)
 * **Web Framework:** [Express.js](https://expressjs.com/) (`^5.3.0` declared in `dependencies`)
-* **Database Driver & Wrapper:**
-  * [`sqlite3`](https://www.npmjs.com/package/sqlite3) (`^6.0.1`): Core asynchronous C++ SQLite driver for Node.js
+* **Cloud Database Client:** [`@libsql/client`](https://www.npmjs.com/package/@libsql/client) (`^0.18.0`): Pure JavaScript client for connecting to Turso cloud database over HTTP
+* **Local Database Driver & Wrapper:**
+  * [`sqlite3`](https://www.npmjs.com/package/sqlite3) (`^6.0.1`): Core asynchronous C++ SQLite driver for local Node.js execution
   * [`sqlite`](https://www.npmjs.com/package/sqlite) (`^5.1.1`): Promise-based abstraction wrapper over `sqlite3` enabling clean `async`/`await` syntax
 * **Development Tool:** [Nodemon](https://nodemon.io/) (`^3.1.14` declared in `devDependencies`) for automated server restarts during development
+* **Hosting Platform:** [Vercel](https://vercel.com/) (Serverless Node.js execution)
+* **Cloud Database Provider:** [Turso](https://turso.tech/) (Managed distributed SQLite)
 * **Module System:** CommonJS (`require` / `module.exports`)
 * **Protocol & Architecture:** HTTP/1.1 RESTful API
 * **API Testing Tool:** Postman
@@ -59,27 +73,29 @@ The project utilizes the following technologies and exact dependency versions as
 
 ```text
 lab-02/
-├── node_modules/           # External npm packages and dependencies (gitignored)
-├── screenshots/            # Output and verification screenshots
-│   ├── delete.png.png      # Screenshot of DELETE /books/:bookId/ operation in Postman
-│   ├── get.png.png         # Screenshot of GET /books/ (All books) in Postman
-│   ├── get_by_id.png.png   # Screenshot of GET /books/:bookId/ operation in Postman
-│   ├── post.png.png        # Screenshot of POST /books/ (Add new book) in Postman
-│   ├── put.png.png         # Screenshot of PUT /books/:bookId/ (Update book) in Postman
-│   └── sqlite-verification.png # Screenshot of SQLite CLI database verification
-├── books.db                # SQLite database binary storage file
-├── database.sql            # SQL schema definition and seed data
-├── index.js                # Express.js server, database initialization, and CRUD routes
-├── package-lock.json       # Exact dependency lockfile for reproducible builds
-├── package.json            # Project manifest, scripts, and dependencies
-└── README.md               # Lab documentation and student report
+├── node_modules/                 # External npm packages and dependencies (gitignored)
+├── screenshots/                  # Output and verification screenshots
+│   ├── delete.png.png            # Screenshot of DELETE /books/:bookId/ operation in Postman
+│   ├── get.png.png               # Screenshot of GET /books/ (All books) in Postman
+│   ├── get_by_id.png.png         # Screenshot of GET /books/:bookId/ operation in Postman
+│   ├── post.png.png              # Screenshot of POST /books/ (Add new book) in Postman
+│   ├── put.png.png               # Screenshot of PUT /books/:bookId/ (Update book) in Postman
+│   ├── sqlite-verification.png   # Screenshot of SQLite CLI database verification (persisted records)
+│   ├── sqlite_verification_1.png # Screenshot of SQLite CLI query execution and initial record rows
+│   └── sqlite_verification_2.png # Screenshot of SQLite CLI scrolled terminal view showing all records
+├── books.db                      # Local SQLite database binary storage file
+├── database.sql                  # SQL schema definition and seed data
+├── index.js                      # Express.js server, dual-mode DB initialization, and CRUD routes
+├── package-lock.json             # Exact dependency lockfile for reproducible builds
+├── package.json                  # Project manifest, scripts, and dependencies
+└── README.md                     # Lab documentation and student report
 ```
 
 ---
 
 ## 5. Prerequisites
 
-Before running this project, ensure you have the following installed on your machine:
+Before running this project locally, ensure you have the following installed:
 
 * **Node.js**: Version 18.0.0 or higher. Verify installation by running:
   ```bash
@@ -103,7 +119,7 @@ Follow these step-by-step instructions to set up the project locally:
    ```
 
 2. Install project dependencies:
-   Run the following command to install Express, SQLite wrapper, and Nodemon as specified in `package.json`:
+   Run the following command to install Express, Turso client, SQLite wrapper, and Nodemon as specified in `package.json`:
    ```bash
    npm install
    ```
@@ -113,7 +129,7 @@ Follow these step-by-step instructions to set up the project locally:
 
 ## 7. Database Configuration and Schema
 
-The application uses an embedded SQLite database (`books.db`). The schema definition and initial seed records are documented in `database.sql`:
+The application schema definition and initial seed records are documented in `database.sql`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS book (
@@ -144,9 +160,13 @@ INSERT INTO book (title, author, price, pages) VALUES
 * `price`: Retail price of the book in INR (`INTEGER`).
 * `pages`: Total page count (`INTEGER`).
 
+### Database Environments:
+* **Local Development:** When `TURSO_DATABASE_URL` is not set, `index.js` automatically connects to the local `books.db` file using `sqlite3`.
+* **Production on Vercel:** When `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present, `index.js` initializes the Turso cloud database client, creates the `book` table if it does not exist, and populates the seed data if the table is empty.
+
 ---
 
-## 8. How to Run the Express & SQLite Server
+## 8. How to Run the Server Locally
 
 The application server can be started in standard production mode or in development mode.
 
@@ -161,10 +181,10 @@ npm start
 npm run dev
 ```
 
-### Expected Console Output
-Upon successful initialization of the SQLite database connection and the Express server, the terminal displays:
+### Expected Local Console Output
+Upon successful initialization of the local SQLite database and the Express server, the terminal displays:
 ```text
-Database connected successfully
+SQLite database connected successfully
 Server running at http://localhost:3000
 ```
 
@@ -181,19 +201,20 @@ The Express application implements a complete RESTful CRUD API on the `/books` r
 | HTTP Method | Endpoint Path | Description | Expected Status |
 | :--- | :--- | :--- | :--- |
 | **GET** | `/books/` | Retrieves all books stored in the database | `200 OK` |
-| **GET** | `/books/:bookId/` | Retrieves a specific book by its ID | `200 OK` |
+| **GET** | `/books/:bookId/` | Retrieves a specific book by its ID | `200 OK` / `404 Not Found` |
 | **POST** | `/books/` | Adds a new book to the database | `200 OK` |
-| **PUT** | `/books/:bookId/` | Updates an existing book's details by ID | `200 OK` |
-| **DELETE** | `/books/:bookId/` | Deletes a book record from the database by ID | `200 OK` |
+| **PUT** | `/books/:bookId/` | Updates an existing book's details by ID | `200 OK` / `404 Not Found` |
+| **DELETE** | `/books/:bookId/` | Deletes a book record from the database by ID | `200 OK` / `404 Not Found` |
 
 ---
 
 ### Detailed Endpoint Specifications
 
 #### 1. GET /books/ (Retrieve All Books)
-* **Description:** Queries the SQLite database and returns the full collection of books.
+* **Description:** Queries the database and returns the full collection of books.
 * **HTTP Method:** `GET`
-* **URL:** `http://localhost:3000/books/`
+* **Local URL:** `http://localhost:3000/books/`
+* **Live URL:** `https://backend-development-fundamentals-ig.vercel.app/books/`
 * **SQL Query Executed:**
   ```sql
   SELECT * FROM book;
@@ -222,28 +243,30 @@ The Express application implements a complete RESTful CRUD API on the `/books` r
 #### 2. GET /books/:bookId/ (Retrieve Book by ID)
 * **Description:** Queries a single book by its unique primary key `id`.
 * **HTTP Method:** `GET`
-* **URL:** `http://localhost:3000/books/:bookId/` (e.g., `http://localhost:3000/books/1`)
+* **Local URL:** `http://localhost:3000/books/:bookId/` (e.g., `http://localhost:3000/books/2/`)
+* **Live URL:** `https://backend-development-fundamentals-ig.vercel.app/books/2/`
 * **URL Parameters:** `bookId` (integer) - the primary key of the book.
 * **SQL Query Executed:**
   ```sql
   SELECT * FROM book WHERE id = ?;
   ```
-* **Response Status:** `200 OK`
-* **Sample Response Body:**
+* **Response Status:** `200 OK` (or `404 Not Found` if the record does not exist)
+* **Sample Response Body (200 OK):**
   ```json
   {
-    "id": 1,
-    "title": "The Alchemist",
-    "author": "Paulo Coelho",
-    "price": 250,
-    "pages": 208
+    "id": 2,
+    "title": "Atomic Habits",
+    "author": "James Clear",
+    "price": 450,
+    "pages": 320
   }
   ```
 
 #### 3. POST /books/ (Create a New Book)
 * **Description:** Inserts a newly provided book into the database with values parsed from the JSON body.
 * **HTTP Method:** `POST`
-* **URL:** `http://localhost:3000/books/`
+* **Local URL:** `http://localhost:3000/books/`
+* **Live URL:** `https://backend-development-fundamentals-ig.vercel.app/books/`
 * **Request Headers:** `Content-Type: application/json`
 * **Request Body:**
   ```json
@@ -266,9 +289,10 @@ The Express application implements a complete RESTful CRUD API on the `/books` r
   ```
 
 #### 4. PUT /books/:bookId/ (Update an Existing Book)
-* **Description:** Updates all attributes (`title`, `author`, `price`, `pages`) of a target book matching `bookId`.
+* **Description:** Updates attributes (`title`, `author`, `price`, `pages`) of a target book matching `bookId`.
 * **HTTP Method:** `PUT`
-* **URL:** `http://localhost:3000/books/:bookId/` (e.g., `http://localhost:3000/books/1/`)
+* **Local URL:** `http://localhost:3000/books/:bookId/` (e.g., `http://localhost:3000/books/1/`)
+* **Live URL:** `https://backend-development-fundamentals-ig.vercel.app/books/1/`
 * **URL Parameters:** `bookId` (integer) - target book ID.
 * **Request Headers:** `Content-Type: application/json`
 * **Request Body:**
@@ -286,7 +310,7 @@ The Express application implements a complete RESTful CRUD API on the `/books` r
   SET title = ?, author = ?, price = ?, pages = ?
   WHERE id = ?;
   ```
-* **Response Status:** `200 OK`
+* **Response Status:** `200 OK` (or `404 Not Found` if book ID does not exist)
 * **Response Body:**
   ```text
   Book updated successfully
@@ -295,13 +319,14 @@ The Express application implements a complete RESTful CRUD API on the `/books` r
 #### 5. DELETE /books/:bookId/ (Delete a Book)
 * **Description:** Deletes a specific book from the database table matching `bookId`.
 * **HTTP Method:** `DELETE`
-* **URL:** `http://localhost:3000/books/:bookId/` (e.g., `http://localhost:3000/books/1/`)
+* **Local URL:** `http://localhost:3000/books/:bookId/` (e.g., `http://localhost:3000/books/1/`)
+* **Live URL:** `https://backend-development-fundamentals-ig.vercel.app/books/1/`
 * **URL Parameters:** `bookId` (integer) - target book ID to delete.
 * **SQL Query Executed:**
   ```sql
   DELETE FROM book WHERE id = ?;
   ```
-* **Response Status:** `200 OK`
+* **Response Status:** `200 OK` (or `404 Not Found` if book ID does not exist)
 * **Response Body:**
   ```text
   Book deleted successfully
@@ -311,7 +336,7 @@ The Express application implements a complete RESTful CRUD API on the `/books` r
 
 ## 10. Explanation of package.json and Dependencies
 
-The project's dependencies are declared in `package.json`:
+The project dependencies are declared in `package.json`:
 
 ```json
 {
@@ -324,6 +349,7 @@ The project's dependencies are declared in `package.json`:
     "dev": "nodemon index.js"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "express": "^5.3.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1"
@@ -335,62 +361,73 @@ The project's dependencies are declared in `package.json`:
 ```
 
 ### Dependency Roles:
-* **`express` (`^5.3.0`)**: The core HTTP server framework providing route handlers, JSON body parser middleware (`express.json()`), and request-response lifecycle management.
-* **`sqlite3` (`^6.0.1`)**: Native asynchronous SQLite driver that connects Node.js directly to the local SQLite database engine.
-* **`sqlite` (`^5.1.1`)**: A modern Promise-based client wrapper around `sqlite3`. It provides helper methods such as `open()`, `db.all()`, `db.get()`, and `db.run()` that work seamlessly with `async`/`await`.
-* **`nodemon` (`^3.1.14`)**: Development tool that watches for source code modifications and automatically restarts the application server.
+* **`express` (`^5.3.0`)**: The core web framework providing route dispatching, JSON middleware (`express.json()`), and HTTP lifecycle management.
+* **`@libsql/client` (`^0.18.0`)**: Lightweight, pure JavaScript HTTP client used for connecting to Turso cloud database on Vercel. It requires no native C++ compilation, completely bypassing native GLIBC constraints on serverless platforms.
+* **`sqlite3` (`^6.0.1`)**: Native asynchronous SQLite driver used for local execution on Windows/macOS/Linux.
+* **`sqlite` (`^5.1.1`)**: Promise-based client wrapper around `sqlite3` for clean `async`/`await` syntax during local development.
+* **`nodemon` (`^3.1.14`)**: Developer convenience tool for automatic server restarts upon file changes.
 
 ---
 
-## 11. Database Operations & SQLite Integration
+## 11. Database Operations & Dual-Mode Architecture
 
-### Database Initialization and Server Lifecycle
-In `index.js`, the server initialization is structured to ensure that the database connection is established before listening for incoming HTTP connections:
+In `index.js`, the application implements an adaptive dual-mode database layer:
 
 ```javascript
-const initializeDBAndServer = async () => {
-    try {
+const initializeDB = async () => {
+    if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+        // TURSO DATABASE (VERCEL PRODUCTION)
+        turso = createClient({
+            url: process.env.TURSO_DATABASE_URL,
+            authToken: process.env.TURSO_AUTH_TOKEN
+        });
+        // Auto-creates schema and seeds initial data if table is empty
+        ...
+        console.log("Turso database connected successfully");
+    } else {
+        // LOCAL SQLITE DATABASE (DEVELOPMENT)
+        const sqlite3 = require("sqlite3");
+        const { open } = require("sqlite");
+
         db = await open({
-            filename: dbPath,
+            filename: path.join(__dirname, "books.db"),
             driver: sqlite3.Database
         });
-
-        console.log("Database connected successfully");
-
-        app.listen(3000, () => {
-            console.log("Server running at http://localhost:3000");
-        });
-    } catch (error) {
-        console.log(`Database Error: ${error.message}`);
-        process.exit(1);
+        console.log("SQLite database connected successfully");
     }
 };
 ```
 
-### Parameterized Queries and SQL Injection Prevention
-Direct string concatenation in SQL queries allows untrusted client input to alter SQL execution syntax (SQL injection). To prevent this, all database queries in `index.js` use parameterized queries with `?` placeholders:
-
-* **Single Record Fetch (`db.get`):**
-  ```javascript
-  const book = await db.get("SELECT * FROM book WHERE id = ?", [bookId]);
-  ```
-* **Data Mutation (`db.run`):**
-  ```javascript
-  await db.run(
-      "UPDATE book SET title = ?, author = ?, price = ?, pages = ? WHERE id = ?",
-      [title, author, price, pages, bookId]
-  );
-  ```
-The database engine treats the bound parameters strictly as literal values, ensuring that special characters cannot alter the query structure.
+### Key Architectural Benefits:
+1. **Preserves Assignment Requirements:** Retains the exact local SQLite database (`books.db`) workflow with zero changes to local assignment execution.
+2. **True Cloud Persistence:** Resolves the serverless ephemeral/read-only filesystem limitation on Vercel by utilizing Turso's cloud database over HTTP.
+3. **Parameterized Queries:** Both drivers strictly execute queries using parameterized arguments (`?` placeholders) to prevent SQL injection vulnerabilities across both local SQLite and remote Turso engines.
+4. **Serverless Middleware Check:** Custom `ensureDatabase()` middleware verifies connection readiness on incoming requests, preventing cold-start race conditions.
 
 ---
 
-## 12. Screenshots
+## 12. Environment Variables
+
+To connect the application to the Turso cloud database when deployed on Vercel, the following environment variables are required:
+
+| Environment Variable | Description | Location / Scope |
+| :--- | :--- | :--- |
+| `TURSO_DATABASE_URL` | The secure connection URL endpoint for the remote Turso database instance (e.g., `libsql://<database-name>-<org>.turso.io`) | Vercel Project Environment Variables |
+| `TURSO_AUTH_TOKEN` | The secret bearer authentication token issued by Turso to authorize database read and write transactions | Vercel Project Environment Variables |
+
+> [!IMPORTANT]
+> **Security Notice:** Actual database connection URLs and secret authentication tokens are confidential credentials and must **never** be hardcoded in source code or committed to public Git repositories. They are securely injected into the runtime environment via the Vercel Dashboard under **Project Settings &rarr; Environment Variables**.
+>
+> In local development, if these variables are omitted, the application automatically defaults to using the local SQLite database (`books.db`).
+
+---
+
+## 13. Screenshots
 
 All screenshots from the Postman API test runs and SQLite database verification are embedded below using exact relative paths pointing to the existing files in the `screenshots/` directory.
 
 ### 1. GET All Books (`GET /books/`)
-Retrieving the complete list of books from the SQLite database via Postman:
+Retrieving the complete list of books from the database via Postman:
 
 ![GET all books](screenshots/get.png.png)
 
@@ -435,31 +472,64 @@ Removing a specific book record from the database table:
 ---
 
 ### 6. SQLite Database Verification
-Direct verification of the SQLite database records via the SQLite CLI:
 
+The following screenshots capture direct verification of the persistent database state inside the SQLite CLI:
+
+#### Verification Overview
 ![SQLite Database Verification](screenshots/sqlite-verification.png)
 
-*Caption: SQLite CLI output showing the book records stored in SQLite after testing the CRUD operations, confirming the deletion of book ID 1 and the addition of book ID 11 ("The Hobbit").*
+*Caption: Direct SQLite CLI inspection confirming persistent database records after running CRUD operations (demonstrating the deletion of ID 1 and the successful insertion of ID 11 "The Hobbit").*
+
+#### Query Execution & Top Rows (Verification Part 1)
+![SQLite Verification Part 1](screenshots/sqlite_verification_1.png)
+
+*Caption: SQLite CLI terminal executing `SELECT * FROM book;` displaying column headers (`id`, `title`, `author`, `price`, `pages`) and initial rows (IDs 2 through 9), confirming that record ID 1 was deleted.*
+
+#### Terminal View & CRUD Persistence (Verification Part 2)
+![SQLite Verification Part 2](screenshots/sqlite_verification_2.png)
+
+*Caption: Scrolled terminal view in the SQLite CLI displaying all remaining book records down to ID 11 ("The Hobbit" by J.R.R. Tolkien), verifying that the new book from the POST request was persisted.*
 
 ---
 
-## 13. Learning Outcomes
+## 14. Deployment
+
+The Express REST API application has been successfully deployed to production using Vercel.
+
+* **Deployment Status:** Successfully Deployed
+* **Hosting Platform:** Vercel (Serverless Function Architecture)
+* **Live Application URL:** https://backend-development-fundamentals-ig.vercel.app
+* **Database Provider:** Turso (Managed LibSQL / Cloud SQLite)
+* **Production Entry Point:** `index.js` (`module.exports = app`)
+
+### Available Live Endpoints
+
+| HTTP Method | Live Endpoint URL | Description |
+| :--- | :--- | :--- |
+| **GET** | `https://backend-development-fundamentals-ig.vercel.app/books/` | Retrieves all persistent book records from Turso cloud database |
+| **GET** | `https://backend-development-fundamentals-ig.vercel.app/books/:bookId/` | Retrieves a specific book record by its primary key ID |
+| **POST** | `https://backend-development-fundamentals-ig.vercel.app/books/` | Creates and inserts a new book record into the cloud database |
+| **PUT** | `https://backend-development-fundamentals-ig.vercel.app/books/:bookId/` | Updates an existing book record's details by ID |
+| **DELETE** | `https://backend-development-fundamentals-ig.vercel.app/books/:bookId/` | Deletes a book record from the database by ID |
+
+---
+
+## 15. Learning Outcomes
 
 Through completing this lab, the following core backend and database development competencies were acquired:
 
-1. **Relational Database Integration:**
-   * Configured an embedded SQLite relational database in an Express.js application using `sqlite` and `sqlite3`.
-   * Understood asynchronous database lifecycle management and guaranteed database connection availability before opening the HTTP port.
+1. **Relational Database Design & Operations:**
+   * Structured a relational SQLite database schema with auto-increment primary keys and typed columns.
+   * Mastered full CRUD implementation across all four standard REST HTTP methods (`GET`, `POST`, `PUT`, `DELETE`).
 
-2. **Full RESTful CRUD Implementation:**
-   * Implemented all four primary HTTP verbs (`GET`, `POST`, `PUT`, `DELETE`) adhering to REST architectural standards.
-   * Leveraged `express.json()` middleware to parse incoming request payloads for create and update operations.
+2. **Security & Parameterized Queries:**
+   * Applied parameterized queries using `?` placeholders with `db.all()`, `db.get()`, `db.run()`, and Turso's `execute()` method.
+   * Understood how parameterized execution prevents SQL injection attacks by strictly binding user inputs as data rather than executable code.
 
-3. **Secure Query Execution:**
-   * Applied parameterized queries using `?` placeholders with `db.all()`, `db.get()`, and `db.run()` methods.
-   * Gained understanding of how parameterized statements neutralize SQL injection risks.
+3. **Dual-Mode Local & Cloud Database Architecture:**
+   * Resolved serverless filesystem limitations (read-only bundle and ephemeral storage) by integrating Turso cloud database via `@libsql/client`.
+   * Maintained seamless local development with embedded SQLite while achieving true data persistence in cloud serverless deployments.
 
-4. **API Testing with Postman:**
-   * Formulated and tested diverse HTTP requests in Postman, including setting HTTP methods, URL route parameters, JSON body payloads, and headers.
-   * Verified HTTP response status codes (`200 OK`) and response payloads for correctness.
-
+4. **Production Serverless Deployment:**
+   * Exported Express application instances for serverless function environments on Vercel.
+   * Managed environment variables (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`) securely without exposing secrets in version control.
