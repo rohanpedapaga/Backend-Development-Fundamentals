@@ -1,8 +1,7 @@
-require('dotenv').config();
+require("dotenv").config();
+
 const express = require("express");
 const { createClient } = require("@libsql/client");
-const sqlite3 = require("sqlite3");
-const sqlite = require("sqlite");
 const path = require("path");
 
 const app = express();
@@ -11,6 +10,7 @@ app.use(express.json());
 const dbPath = path.join(__dirname, "books.db");
 
 let db;
+let dbInitialization;
 
 // Allowed columns for sorting
 const allowedColumns = ["id", "title", "author", "price", "pages"];
@@ -42,6 +42,111 @@ function validateBook(title, author, price, pages) {
 
     return null;
 }
+
+// Initialize database (Turso or local SQLite)
+async function initializeDatabase() {
+    if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+
+        // Connect to Turso cloud database
+        const client = createClient({
+            url: process.env.TURSO_DATABASE_URL,
+            authToken: process.env.TURSO_AUTH_TOKEN,
+        });
+
+        // SQLite-compatible wrapper for Turso
+        db = {
+            run: async (sql, params = []) => {
+                const result = await client.execute({
+                    sql,
+                    args: params
+                });
+
+                return {
+                    lastID: Number(result.lastInsertRowid),
+                    changes: result.rowsAffected
+                };
+            },
+
+            all: async (sql, params = []) => {
+                const result = await client.execute({
+                    sql,
+                    args: params
+                });
+
+                return result.rows;
+            },
+
+            get: async (sql, params = []) => {
+                const result = await client.execute({
+                    sql,
+                    args: params
+                });
+
+                return result.rows[0];
+            }
+        };
+
+        console.log("Connected to Turso database");
+
+        // Ensure table exists
+        await db.run(`
+            CREATE TABLE IF NOT EXISTS book (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                author TEXT,
+                price INTEGER,
+                pages INTEGER
+            );
+        `);
+
+    } else {
+
+        // Load SQLite only when using local development
+        const sqlite3 = require("sqlite3");
+        const sqlite = require("sqlite");
+
+        db = await sqlite.open({
+            filename: dbPath,
+            driver: sqlite3.Database,
+        });
+
+        console.log("Connected to local SQLite database");
+
+        await db.run(`
+            CREATE TABLE IF NOT EXISTS book (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT,
+                author TEXT,
+                price INTEGER,
+                pages INTEGER
+            );
+        `);
+    }
+}
+
+// Initialize database only once per server instance
+async function ensureDatabase() {
+    if (!dbInitialization) {
+        dbInitialization = initializeDatabase();
+    }
+
+    return dbInitialization;
+}
+
+// Ensure database is ready before handling requests
+app.use(async (req, res, next) => {
+    try {
+        await ensureDatabase();
+        next();
+    } catch (error) {
+        console.error("Database connection failed:", error);
+
+        return res.status(500).json({
+            message: "Database connection failed"
+        });
+    }
+});
+
 
 // GET all books with search, sorting, pagination and price filtering
 app.get("/books", async (req, res) => {
@@ -143,7 +248,7 @@ app.get("/books", async (req, res) => {
             sql += " WHERE " + conditions.join(" AND ");
         }
 
-        // Sorting uses validated column and direction
+        // Sorting
         sql += ` ORDER BY ${sortColumn} ${sortOrder} LIMIT ? OFFSET ?`;
 
         params.push(pageLimit, pageOffset);
@@ -157,6 +262,7 @@ app.get("/books", async (req, res) => {
 
     } catch (error) {
         console.error(error);
+
         return res.status(500).json({
             message: "Internal server error"
         });
@@ -190,6 +296,7 @@ app.get("/books/:bookId", async (req, res) => {
 
     } catch (error) {
         console.error(error);
+
         return res.status(500).json({
             message: "Internal server error"
         });
@@ -223,6 +330,7 @@ app.post("/books", async (req, res) => {
 
     } catch (error) {
         console.error(error);
+
         return res.status(500).json({
             message: "Internal server error"
         });
@@ -269,6 +377,7 @@ app.put("/books/:bookId", async (req, res) => {
 
     } catch (error) {
         console.error(error);
+
         return res.status(500).json({
             message: "Internal server error"
         });
@@ -304,6 +413,7 @@ app.delete("/books/:bookId", async (req, res) => {
 
     } catch (error) {
         console.error(error);
+
         return res.status(500).json({
             message: "Internal server error"
         });
@@ -311,74 +421,27 @@ app.delete("/books/:bookId", async (req, res) => {
 });
 
 
-// Initialize database (Turso or local SQLite) and start server
-async function initializeDatabase() {
-    if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-        // Connect to Turso (cloud) database
-        const client = createClient({
-            url: process.env.TURSO_DATABASE_URL,
-            authToken: process.env.TURSO_AUTH_TOKEN,
-        });
-        // Wrap Turso client with sqlite‑like API used in routes
-        db = {
-            run: async (sql, params) => {
-                const result = await client.execute({ sql, args: params });
-                return {
-                    lastID: Number(result.lastInsertRowid),
-                    changes: result.rowsAffected ?? result.rowCount,
-                };
-            },
-            all: async (sql, params) => {
-                const result = await client.execute({ sql, args: params });
-                return result.rows;
-            },
-            get: async (sql, params) => {
-                const result = await client.execute({ sql, args: params });
-                return result.rows[0];
-            },
-        };
-        console.log("Connected to Turso database");
-        // Ensure the book table exists
-        await db.run(`CREATE TABLE IF NOT EXISTS book (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            author TEXT,
-            price INTEGER,
-            pages INTEGER
-        );`, []);
-    } else {
-        // Fallback to local SQLite file
-        db = await sqlite.open({
-            filename: dbPath,
-            driver: sqlite3.Database,
-        });
-        console.log("Connected to local SQLite database");
-        await db.run(`CREATE TABLE IF NOT EXISTS book (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            author TEXT,
-            price INTEGER,
-            pages INTEGER
-        );`);
-    }
-}
-
+// Start local server
 async function startServer() {
     try {
-        await initializeDatabase();
+        await ensureDatabase();
+
         const PORT = process.env.PORT || 3000;
+
         app.listen(PORT, () => {
             console.log(`Server running at http://localhost:${PORT}`);
         });
+
     } catch (error) {
         console.error("Database connection failed:", error);
         process.exit(1);
     }
 }
 
-// Start only when run directly (Vercel will import the module)
+// Start only when running locally
 if (require.main === module) {
     startServer();
 }
 
+// Export Express app for Vercel
 module.exports = app;
