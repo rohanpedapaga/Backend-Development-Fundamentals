@@ -250,3 +250,22 @@ When an asynchronous database operation is not awaited, the application may cont
 ![Invalid price](Screenshots/invalid_price.png)
 
 This lab helped implement a REST API with Express.js and SQLite. The application supports CRUD operations, search, sorting, pagination and price filtering. Input validation and appropriate HTTP status codes were also implemented and tested using Postman.
+
+## Deployment
+
+The REST API is deployed on Vercel and uses Turso as its cloud database.
+
+- **Live API:** https://lab-03-books-api.vercel.app
+- **Database:** Turso (LibSQL)
+- **Hosting:** Vercel
+- **Environment Variables:**
+  - `TURSO_DATABASE_URL`
+  - `TURSO_AUTH_TOKEN`
+
+### Deployment Verification
+
+The deployed API was tested successfully.
+
+- GET `/books` returns all stored books.
+- Data is retrieved from the Turso cloud database.
+- The API returns a successful JSON response.
