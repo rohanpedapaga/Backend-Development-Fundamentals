@@ -1,4 +1,6 @@
+require('dotenv').config();
 const express = require("express");
+const { createClient } = require("@libsql/client");
 const sqlite3 = require("sqlite3");
 const sqlite = require("sqlite");
 const path = require("path");
@@ -309,26 +311,74 @@ app.delete("/books/:bookId", async (req, res) => {
 });
 
 
-// Connect database and start server
-async function startServer() {
-    try {
+// Initialize database (Turso or local SQLite) and start server
+async function initializeDatabase() {
+    if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+        // Connect to Turso (cloud) database
+        const client = createClient({
+            url: process.env.TURSO_DATABASE_URL,
+            authToken: process.env.TURSO_AUTH_TOKEN,
+        });
+        // Wrap Turso client with sqlite‑like API used in routes
+        db = {
+            run: async (sql, params) => {
+                const result = await client.execute({ sql, args: params });
+                return {
+                    lastID: Number(result.lastInsertRowid),
+                    changes: result.rowsAffected ?? result.rowCount,
+                };
+            },
+            all: async (sql, params) => {
+                const result = await client.execute({ sql, args: params });
+                return result.rows;
+            },
+            get: async (sql, params) => {
+                const result = await client.execute({ sql, args: params });
+                return result.rows[0];
+            },
+        };
+        console.log("Connected to Turso database");
+        // Ensure the book table exists
+        await db.run(`CREATE TABLE IF NOT EXISTS book (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            author TEXT,
+            price INTEGER,
+            pages INTEGER
+        );`, []);
+    } else {
+        // Fallback to local SQLite file
         db = await sqlite.open({
             filename: dbPath,
-            driver: sqlite3.Database
+            driver: sqlite3.Database,
         });
+        console.log("Connected to local SQLite database");
+        await db.run(`CREATE TABLE IF NOT EXISTS book (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            author TEXT,
+            price INTEGER,
+            pages INTEGER
+        );`);
+    }
+}
 
-        console.log("Database connected successfully");
-
+async function startServer() {
+    try {
+        await initializeDatabase();
         const PORT = process.env.PORT || 3000;
-
         app.listen(PORT, () => {
             console.log(`Server running at http://localhost:${PORT}`);
         });
-
     } catch (error) {
-        console.error("Database connection failed:", error.message);
+        console.error("Database connection failed:", error);
         process.exit(1);
     }
 }
 
-startServer();
+// Start only when run directly (Vercel will import the module)
+if (require.main === module) {
+    startServer();
+}
+
+module.exports = app;
